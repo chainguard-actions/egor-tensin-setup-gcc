@@ -1,15 +1,76 @@
-# egor-tensin/setup-gcc
+Set up GCC
+==========
 
-Install GCC
+[![Test](https://github.com/egor-tensin/setup-gcc/actions/workflows/test.yml/badge.svg)](https://github.com/egor-tensin/setup-gcc/actions/workflows/test.yml)
 
-Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/egor-tensin/setup-gcc](https://github.com/egor-tensin/setup-gcc).
+This GitHub action sets up GCC in your workflow run.
 
-## Versions
+1. Installs either 32-bit or 64-bit GCC on Ubuntu (possibly, a specific version).
+2. Specify a version to install using the `version` parameter.
+3. For installing GCC on Windows please see my action [setup-mingw].
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v1.3 | [`v1.3`](https://github.com/chainguard-actions/egor-tensin-setup-gcc/tree/v1.3) | [`eaa888e`](https://github.com/egor-tensin/setup-gcc/commit/eaa888eb19115a521fa72b65cd94fe1f25bbcaac) |
-| v2 | [`v2`](https://github.com/chainguard-actions/egor-tensin-setup-gcc/tree/v2) | [`a2861a8`](https://github.com/egor-tensin/setup-gcc/commit/a2861a8b8538f49cf2850980acccf6b05a1b2ae4) |
+[setup-mingw]: https://github.com/egor-tensin/setup-mingw
+
+Use it in your workflow like this:
+
+    - name: Set up GCC
+      uses: egor-tensin/setup-gcc@v2
+      with:
+        version: latest
+        platform: x64
+
+* `latest` is the default value for the `version` parameter and can be omitted.
+* `x64` is the default value for the `platform` parameter and can be omitted.
+Use `x86` if you want to build 32-bit binaries.
+* `cc` and `c++` executables are set up, pointing to the `gcc` and `g++`
+executables.
+Disable this by setting the `cc` parameter to `0`.
+
+API
+---
+
+| Input     | Value   | Default | Description
+| --------- | ------- | ------- | -----------
+| version   | latest  | ✓       | Install the latest version available in the repository.
+|           | *any*   |         | Install a specific version if it's available (see below).
+| platform  | x64     | ✓       | Install the x86_64 toolchain.
+|           | *any*   |         | Install the i686 toolchain.
+| cc        | 1       | ✓       | Set up `cc`/`gcc`/`c++`/`g++` executables.
+|           | *any*   |         | Don't set up the executables.
+
+Supported versions
+------------------
+
+Unless the `version` parameter value is "latest", the ubuntu-toolchain-r/test
+PPA is used to make more versions available.
+You can pass the version number as the `version` parameter value (`4.8`, `8`,
+`9`, etc.), and this action will install the corresponding packages.
+
+The `version` parameter value is not checked for being an available version for
+the current distribution.
+The supported versions for a particular distribution are those found in that
+distro's repositories & those in the PPA.
+For example, you can find the list of available versions as of December 2025
+below.
+
+| `version` | Jammy | Noble
+| --------- | ----- | -----
+| 9         | ✓     | ✓
+| 10        | ✓     | ✓
+| 11        | ✓     | ✓
+| 12        | ✓     | ✓
+| 13        | ✓     | ✓
+| 14        |       | ✓
+
+This table should be updated periodically; it's a work-in-progress.
+
+License
+-------
+
+Distributed under the MIT License.
+See [LICENSE.txt] for details.
+
+[LICENSE.txt]: LICENSE.txt
 
 ## Privacy
 
