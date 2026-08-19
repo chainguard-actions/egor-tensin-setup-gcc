@@ -1,0 +1,84 @@
+name: Test GCC installation without cc symlinks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - name: Remove any existing cc/gcc symlinks to get a clean baseline
+        run: |
+          sudo rm -f /usr/local/bin/cc /usr/local/bin/gcc /usr/local/bin/c++ /usr/local/bin/g++ || true
+
+      - id: action
+        uses: .
+        with:
+          version: latest
+          platform: x64
+          cc: 0
+
+      - name: Assert gcc output is set
+        env:
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc output: $GCC_OUT"
+          if [ -z "$GCC_OUT" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          echo "PASS: gcc output = $GCC_OUT"
+
+      - name: Assert gxx output is set
+        env:
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx output: $GXX_OUT"
+          if [ -z "$GXX_OUT" ]; then
+            echo "FAIL: gxx output is empty"
+            exit 1
+          fi
+          echo "PASS: gxx output = $GXX_OUT"
+
+      - name: Assert versioned gcc binary is available
+        env:
+          GCC_BIN: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "Checking gcc binary: $GCC_BIN"
+          if ! command -v "$GCC_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GCC_BIN not found in PATH"
+            exit 1
+          fi
+          echo "PASS: $GCC_BIN is available"
+          "$GCC_BIN" --version
+
+      - name: Assert cc symlink was NOT created in /usr/local/bin
+        run: |
+          echo "Checking that /usr/local/bin/cc was not created"
+          if [ -f /usr/local/bin/cc ] || [ -L /usr/local/bin/cc ]; then
+            echo "FAIL: /usr/local/bin/cc exists but should not have been created"
+            exit 1
+          fi
+          echo "PASS: /usr/local/bin/cc was not created by the action"
+
+      - name: Assert gcc symlink was NOT created in /usr/local/bin
+        run: |
+          echo "Checking that /usr/local/bin/gcc was not created"
+          if [ -f /usr/local/bin/gcc ] || [ -L /usr/local/bin/gcc ]; then
+            echo "FAIL: /usr/local/bin/gcc exists but should not have been created"
+            exit 1
+          fi
+          echo "PASS: /usr/local/bin/gcc was not created by the action"

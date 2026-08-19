@@ -1,0 +1,121 @@
+name: Test basic GCC installation (latest, x64)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          version: latest
+          platform: x64
+          cc: 1
+
+      - name: Assert gcc output is set
+        env:
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc output: $GCC_OUT"
+          if [ -z "$GCC_OUT" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          echo "PASS: gcc output = $GCC_OUT"
+
+      - name: Assert gxx output is set
+        env:
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx output: $GXX_OUT"
+          if [ -z "$GXX_OUT" ]; then
+            echo "FAIL: gxx output is empty"
+            exit 1
+          fi
+          echo "PASS: gxx output = $GXX_OUT"
+
+      - name: Assert gcc binary is executable
+        env:
+          GCC_BIN: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "Checking gcc binary: $GCC_BIN"
+          if ! command -v "$GCC_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GCC_BIN not found in PATH"
+            exit 1
+          fi
+          echo "PASS: $GCC_BIN is available"
+          "$GCC_BIN" --version
+
+      - name: Assert gxx binary is executable
+        env:
+          GXX_BIN: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "Checking g++ binary: $GXX_BIN"
+          if ! command -v "$GXX_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GXX_BIN not found in PATH"
+            exit 1
+          fi
+          echo "PASS: $GXX_BIN is available"
+          "$GXX_BIN" --version
+
+      - name: Assert cc symlink is set up
+        run: |
+          echo "Checking cc symlink"
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: cc is available"
+          cc --version
+
+      - name: Assert gcc symlink is set up
+        run: |
+          echo "Checking gcc symlink"
+          if ! command -v gcc > /dev/null 2>&1; then
+            echo "FAIL: gcc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: gcc is available"
+          gcc --version
+
+      - name: Assert c++ symlink is set up
+        run: |
+          echo "Checking c++ symlink"
+          if ! command -v c++ > /dev/null 2>&1; then
+            echo "FAIL: c++ not found in PATH"
+            exit 1
+          fi
+          echo "PASS: c++ is available"
+          c++ --version
+
+      - name: Assert g++ symlink is set up
+        run: |
+          echo "Checking g++ symlink"
+          if ! command -v g++ > /dev/null 2>&1; then
+            echo "FAIL: g++ not found in PATH"
+            exit 1
+          fi
+          echo "PASS: g++ is available"
+          g++ --version
+
+      - name: Compile a simple C program
+        run: |
+          echo '#include <stdio.h>' > /tmp/hello.c
+          echo 'int main() { printf("Hello, World!\n"); return 0; }' >> /tmp/hello.c
+          gcc /tmp/hello.c -o /tmp/hello
+          /tmp/hello | grep -q "Hello, World!" && echo "PASS: C compilation works" || (echo "FAIL: C compilation failed"; exit 1)

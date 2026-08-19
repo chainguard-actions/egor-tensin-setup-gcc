@@ -1,0 +1,109 @@
+name: Test GCC installation with specific version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          version: 12
+          platform: x64
+          cc: 1
+
+      - name: Assert gcc output contains version
+        env:
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc output: $GCC_OUT"
+          if [ "$GCC_OUT" != "gcc-12" ]; then
+            echo "FAIL: expected 'gcc-12', got '$GCC_OUT'"
+            exit 1
+          fi
+          echo "PASS: gcc output = $GCC_OUT"
+
+      - name: Assert gxx output contains version
+        env:
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gxx output: $GXX_OUT"
+          if [ "$GXX_OUT" != "g++-12" ]; then
+            echo "FAIL: expected 'g++-12', got '$GXX_OUT'"
+            exit 1
+          fi
+          echo "PASS: gxx output = $GXX_OUT"
+
+      - name: Assert versioned gcc binary is available
+        run: |
+          echo "Checking gcc-12"
+          if ! command -v gcc-12 > /dev/null 2>&1; then
+            echo "FAIL: gcc-12 not found in PATH"
+            exit 1
+          fi
+          echo "PASS: gcc-12 is available"
+          gcc-12 --version
+
+      - name: Assert versioned g++ binary is available
+        run: |
+          echo "Checking g++-12"
+          if ! command -v g++-12 > /dev/null 2>&1; then
+            echo "FAIL: g++-12 not found in PATH"
+            exit 1
+          fi
+          echo "PASS: g++-12 is available"
+          g++-12 --version
+
+      - name: Assert cc points to gcc-12
+        run: |
+          echo "Checking cc -> gcc-12"
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          CC_VERSION=$(cc --version 2>&1 | head -1)
+          echo "cc version: $CC_VERSION"
+          if ! echo "$CC_VERSION" | grep -q "12"; then
+            echo "FAIL: cc does not appear to be gcc-12"
+            exit 1
+          fi
+          echo "PASS: cc points to gcc-12"
+
+      - name: Assert gcc points to gcc-12
+        run: |
+          echo "Checking gcc -> gcc-12"
+          if ! command -v gcc > /dev/null 2>&1; then
+            echo "FAIL: gcc not found in PATH"
+            exit 1
+          fi
+          GCC_VERSION=$(gcc --version 2>&1 | head -1)
+          echo "gcc version: $GCC_VERSION"
+          if ! echo "$GCC_VERSION" | grep -q "12"; then
+            echo "FAIL: gcc does not appear to be gcc-12"
+            exit 1
+          fi
+          echo "PASS: gcc points to gcc-12"
+
+      - name: Compile a simple C++ program with versioned compiler
+        run: |
+          cat > /tmp/hello.cpp << 'EOF'
+          #include <iostream>
+          int main() { std::cout << "Hello from GCC 12!" << std::endl; return 0; }
+          EOF
+          g++-12 /tmp/hello.cpp -o /tmp/hello_cpp
+          /tmp/hello_cpp | grep -q "Hello from GCC 12!" && echo "PASS: C++ compilation works" || (echo "FAIL: C++ compilation failed"; exit 1)

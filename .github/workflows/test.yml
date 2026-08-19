@@ -1,0 +1,63 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly, at 5:45 AM on Friday (somewhat randomly chosen).
+    - cron: '45 5 * * 5'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ubuntu:
+    strategy:
+      matrix:
+        platform: [x86, x64]
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: '${{ matrix.os }}'
+    name: 'Test: ${{ matrix.os }} / ${{ matrix.platform }}'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up GCC
+        uses: ./
+        with:
+          platform: '${{ matrix.platform }}'
+          cc: 1
+      - name: Build foo.exe
+        uses: ./.github/actions/build-foo
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+      - name: Check symlinks
+        uses: ./.github/actions/check-cc
+
+  versions:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+        version: [9, 10, 11, 12, 13, 14]
+        exclude:
+          - {os: ubuntu-22.04, version: 14}
+    runs-on: '${{ matrix.os }}'
+    name: 'Version: ${{ matrix.os }} / ${{ matrix.version }}'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up GCC
+        uses: ./
+        with:
+          version: '${{ matrix.version }}'
+          platform: '${{ matrix.platform }}'
+          cc: 1
+      - name: Build foo.exe
+        uses: ./.github/actions/build-foo
+        with:
+          version: '${{ matrix.version }}'
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+      - name: Check symlinks
+        uses: ./.github/actions/check-cc
+        with:
+          version: '${{ matrix.version }}'
