@@ -1,0 +1,94 @@
+name: Test GCC installation with specific version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh &>/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          version: 12
+          platform: x64
+          cc: 1
+
+      - name: Assert gcc output is 'gcc-12'
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "gcc-12" ]; then
+            echo "FAIL: expected gcc output to be 'gcc-12', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gxx output is 'g++-12'
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ "$ACTUAL" != "g++-12" ]; then
+            echo "FAIL: expected gxx output to be 'g++-12', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gcc-12 binary is available
+        run: |
+          which gcc-12
+          gcc-12 --version
+          echo "PASS: gcc-12 is available"
+
+      - name: Assert g++-12 binary is available
+        run: |
+          which g++-12
+          g++-12 --version
+          echo "PASS: g++-12 is available"
+
+      - name: Assert cc symlink points to gcc-12
+        run: |
+          which cc
+          cc --version | grep -i "12"
+          echo "PASS: cc symlink points to gcc-12"
+
+      - name: Assert gcc symlink points to gcc-12
+        run: |
+          which gcc
+          gcc --version | grep -i "12"
+          echo "PASS: gcc symlink points to gcc-12"
+
+      - name: Assert c++ symlink points to g++-12
+        run: |
+          which c++
+          c++ --version | grep -i "12"
+          echo "PASS: c++ symlink points to g++-12"
+
+      - name: Assert g++ symlink points to g++-12
+        run: |
+          which g++
+          g++ --version | grep -i "12"
+          echo "PASS: g++ symlink points to g++-12"
+
+      - name: Assert can compile a C++ program with versioned compiler
+        run: |
+          echo '#include <iostream>
+          int main() { std::cout << "hello from gcc-12" << std::endl; return 0; }' > /tmp/test12.cpp
+          g++-12 /tmp/test12.cpp -o /tmp/test12_cpp
+          /tmp/test12_cpp
+          echo "PASS: C++ compilation with gcc-12 succeeded"

@@ -1,0 +1,31 @@
+name: Build foo.exe
+description: Build foo.exe
+inputs:
+  version:
+    description: Version to use
+    required: false
+  platform:
+    description: Target platform
+    required: true
+runs:
+  using: composite
+  steps:
+    - env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_PLATFORM: ${{ matrix.platform }}
+        INPUT_RUNNER_OS: ${{ runner.os }}
+      run: |
+        $version = $env:INPUT_VERSION
+        $version = if ($version) { "-$version" } else { $version }
+
+        $flags = @()
+        if ($env:INPUT_PLATFORM -eq 'x86') {
+            $flags += '-m32'
+        }
+        $flags += '-std=c++11','-o','foo','foo.cpp'
+        if ($env:INPUT_RUNNER_OS -eq 'Linux') {
+            $flags += '-lpthread'
+        }
+
+        & "g++$version" $flags
+      shell: pwsh

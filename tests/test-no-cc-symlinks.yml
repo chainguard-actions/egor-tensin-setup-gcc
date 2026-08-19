@@ -1,0 +1,82 @@
+name: Test GCC installation with cc=0 (no symlinks)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh &>/dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -yq --no-install-recommends \
+              wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update -q
+            sudo apt-get install -yq powershell
+          fi
+          pwsh --version
+
+      - name: Remove any pre-existing cc symlink
+        run: |
+          sudo rm -f /usr/local/bin/cc /usr/local/bin/c++ || true
+
+      - id: action
+        uses: .
+        with:
+          version: latest
+          platform: x64
+          cc: 0
+
+      - name: Assert gcc output is 'gcc'
+        env:
+          ACTUAL: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "actual gcc: $ACTUAL"
+          if [ "$ACTUAL" != "gcc" ]; then
+            echo "FAIL: expected gcc output to be 'gcc', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gxx output is 'g++'
+        env:
+          ACTUAL: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "actual gxx: $ACTUAL"
+          if [ "$ACTUAL" != "g++" ]; then
+            echo "FAIL: expected gxx output to be 'g++', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert gcc binary is available
+        run: |
+          which gcc
+          gcc --version
+          echo "PASS: gcc is available"
+
+      - name: Assert g++ binary is available
+        run: |
+          which g++
+          g++ --version
+          echo "PASS: g++ is available"
+
+      - name: Assert cc symlink was NOT created in /usr/local/bin
+        run: |
+          if [ -f /usr/local/bin/cc ] || [ -L /usr/local/bin/cc ]; then
+            echo "FAIL: /usr/local/bin/cc should not exist when cc=0"
+            exit 1
+          fi
+          echo "PASS: /usr/local/bin/cc was not created"
+
+      - name: Assert c++ symlink was NOT created in /usr/local/bin
+        run: |
+          if [ -f /usr/local/bin/c++ ] || [ -L /usr/local/bin/c++ ]; then
+            echo "FAIL: /usr/local/bin/c++ should not exist when cc=0"
+            exit 1
+          fi
+          echo "PASS: /usr/local/bin/c++ was not created"
