@@ -1,0 +1,107 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly, at 5:45 AM on Friday (somewhat randomly chosen).
+    - cron: '45 5 * * 5'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ubuntu:
+    strategy:
+      matrix:
+        platform: [x86, x64]
+        os: [ubuntu-18.04, ubuntu-20.04, ubuntu-22.04]
+    runs-on: '${{ matrix.os }}'
+    name: 'Test: ${{ matrix.os }} / ${{ matrix.platform }}'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - name: Set up GCC
+        uses: ./
+        with:
+          platform: '${{ matrix.platform }}'
+          cc: 1
+      - name: Build foo.exe
+        uses: ./.github/actions/build-foo
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+      - name: Check symlinks
+        uses: ./.github/actions/check-cc
+
+  versions:
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, ubuntu-20.04, ubuntu-22.04]
+        version: [4.8, 5, 6, 7, 8, 9, 10, 11, 12]
+        exclude:
+          - {os: ubuntu-18.04, version: 12}
+          - {os: ubuntu-20.04, version: 4.8}
+          - {os: ubuntu-20.04, version: 5}
+          - {os: ubuntu-20.04, version: 6}
+          - {os: ubuntu-20.04, version: 12}
+          - {os: ubuntu-22.04, version: 4.8}
+          - {os: ubuntu-22.04, version: 5}
+          - {os: ubuntu-22.04, version: 6}
+          - {os: ubuntu-22.04, version: 7}
+          - {os: ubuntu-22.04, version: 8}
+    runs-on: '${{ matrix.os }}'
+    name: 'Version: ${{ matrix.os }} / ${{ matrix.version }}'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - name: Set up GCC
+        uses: ./
+        with:
+          version: '${{ matrix.version }}'
+          platform: '${{ matrix.platform }}'
+          cc: 1
+      - name: Build foo.exe
+        uses: ./.github/actions/build-foo
+        with:
+          version: '${{ matrix.version }}'
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+      - name: Check symlinks
+        uses: ./.github/actions/check-cc
+        with:
+          version: '${{ matrix.version }}'
+
+  cygwin:
+    strategy:
+      matrix:
+        hardlinks: [0, 1]
+    runs-on: windows-latest
+    name: 'Cygwin: hardlinks${{ matrix.hardlinks }}'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
+      - name: Clean up PATH
+        uses: egor-tensin/cleanup-path@8469525c8ee3eddabbd3487658621a6235b3c581 # v3
+      - name: Install Cygwin
+        uses: egor-tensin/setup-cygwin@fca9069f92361187d4abfaa5d8a7490e435d8349 # v4
+      - name: Set up GCC
+        uses: ./
+        with:
+          platform: '${{ matrix.platform }}'
+          cygwin: 1
+          cc: 1
+          hardlinks: '${{ matrix.hardlinks }}'
+      - name: Build foo.exe
+        uses: ./.github/actions/build-foo
+        if: matrix.hardlinks
+      - name: Build foo.exe
+        uses: ./.github/actions/build-foo-cygwin
+        if: '!matrix.hardlinks'
+      - name: Run foo.exe
+        uses: ./.github/actions/run-foo
+      - name: Check symlinks
+        uses: ./.github/actions/check-cc
+        if: matrix.hardlinks
+      - name: Check symlinks
+        uses: ./.github/actions/check-cc-cygwin
+        if: '!matrix.hardlinks'

@@ -1,0 +1,102 @@
+name: Test basic GCC install (latest)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update
+            sudo apt-get install -y powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          version: latest
+          platform: x64
+          cc: 1
+
+      - name: Assert gcc output is set
+        env:
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc output: $GCC_OUT"
+          if [ -z "$GCC_OUT" ]; then
+            echo "FAIL: gcc output is empty"
+            exit 1
+          fi
+          echo "PASS: gcc output = $GCC_OUT"
+
+      - name: Assert gxx output is set
+        env:
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "g++ output: $GXX_OUT"
+          if [ -z "$GXX_OUT" ]; then
+            echo "FAIL: gxx output is empty"
+            exit 1
+          fi
+          echo "PASS: gxx output = $GXX_OUT"
+
+      - name: Assert gcc binary is available
+        env:
+          GCC_BIN: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "Checking for $GCC_BIN"
+          if ! command -v "$GCC_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GCC_BIN not found in PATH"
+            exit 1
+          fi
+          echo "PASS: $GCC_BIN found at $(command -v "$GCC_BIN")"
+
+      - name: Assert g++ binary is available
+        env:
+          GXX_BIN: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "Checking for $GXX_BIN"
+          if ! command -v "$GXX_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GXX_BIN not found in PATH"
+            exit 1
+          fi
+          echo "PASS: $GXX_BIN found at $(command -v "$GXX_BIN")"
+
+      - name: Assert cc symlink is set up
+        run: |
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          echo "PASS: cc found at $(command -v cc)"
+
+      - name: Assert c++ symlink is set up
+        run: |
+          if ! command -v c++ > /dev/null 2>&1; then
+            echo "FAIL: c++ not found in PATH"
+            exit 1
+          fi
+          echo "PASS: c++ found at $(command -v c++)"
+
+      - name: Compile a simple C program
+        run: |
+          cat > /tmp/hello.c << 'EOF'
+          #include <stdio.h>
+          int main() { printf("hello\n"); return 0; }
+          EOF
+          cc /tmp/hello.c -o /tmp/hello
+          OUTPUT="$(/tmp/hello)"
+          echo "Output: $OUTPUT"
+          if [ "$OUTPUT" != "hello" ]; then
+            echo "FAIL: expected 'hello' but got '$OUTPUT'"
+            exit 1
+          fi
+          echo "PASS: compiled and ran C program"

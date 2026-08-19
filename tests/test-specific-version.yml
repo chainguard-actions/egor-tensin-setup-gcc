@@ -1,0 +1,96 @@
+name: Test specific GCC version install
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y wget apt-transport-https software-properties-common
+            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update
+            sudo apt-get install -y powershell
+          fi
+          pwsh --version
+
+      - id: action
+        uses: .
+        with:
+          version: 12
+          platform: x64
+          cc: 1
+
+      - name: Assert gcc output contains version
+        env:
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+        run: |
+          echo "gcc output: $GCC_OUT"
+          if [ "$GCC_OUT" != "gcc-12" ]; then
+            echo "FAIL: expected 'gcc-12' but got '$GCC_OUT'"
+            exit 1
+          fi
+          echo "PASS: gcc output = $GCC_OUT"
+
+      - name: Assert gxx output contains version
+        env:
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "g++ output: $GXX_OUT"
+          if [ "$GXX_OUT" != "g++-12" ]; then
+            echo "FAIL: expected 'g++-12' but got '$GXX_OUT'"
+            exit 1
+          fi
+          echo "PASS: gxx output = $GXX_OUT"
+
+      - name: Assert versioned gcc binary is available
+        run: |
+          if ! command -v gcc-12 > /dev/null 2>&1; then
+            echo "FAIL: gcc-12 not found in PATH"
+            exit 1
+          fi
+          echo "PASS: gcc-12 found at $(command -v gcc-12)"
+
+      - name: Assert versioned g++ binary is available
+        run: |
+          if ! command -v g++-12 > /dev/null 2>&1; then
+            echo "FAIL: g++-12 not found in PATH"
+            exit 1
+          fi
+          echo "PASS: g++-12 found at $(command -v g++-12)"
+
+      - name: Assert cc symlink points to gcc-12
+        run: |
+          if ! command -v cc > /dev/null 2>&1; then
+            echo "FAIL: cc not found in PATH"
+            exit 1
+          fi
+          CC_REAL="$(readlink -f "$(command -v cc)")"
+          GCC_REAL="$(readlink -f "$(command -v gcc-12)")"
+          echo "cc -> $CC_REAL"
+          echo "gcc-12 -> $GCC_REAL"
+          if [ "$CC_REAL" != "$GCC_REAL" ]; then
+            echo "FAIL: cc does not point to gcc-12"
+            exit 1
+          fi
+          echo "PASS: cc points to gcc-12"
+
+      - name: Compile a simple C++ program with versioned compiler
+        run: |
+          cat > /tmp/hello.cpp << 'EOF'
+          #include <iostream>
+          int main() { std::cout << "hello" << std::endl; return 0; }
+          EOF
+          g++-12 /tmp/hello.cpp -o /tmp/hello_cpp
+          OUTPUT="$(/tmp/hello_cpp)"
+          echo "Output: $OUTPUT"
+          if [ "$OUTPUT" != "hello" ]; then
+            echo "FAIL: expected 'hello' but got '$OUTPUT'"
+            exit 1
+          fi
+          echo "PASS: compiled and ran C++ program with g++-12"

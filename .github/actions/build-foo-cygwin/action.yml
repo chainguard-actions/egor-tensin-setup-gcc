@@ -1,0 +1,21 @@
+name: Build foo.exe
+description: Build foo.exe (on Cygwin)
+inputs:
+  platform:
+    description: Target platform
+    required: true
+runs:
+  using: composite
+  steps:
+    - env:
+        GITHUB_WORKSPACE_PATH: ${{ github.workspace }}
+        MATRIX_PLATFORM: ${{ matrix.platform }}
+      run: |
+        src_dir="$GITHUB_WORKSPACE_PATH"
+        echo "$src_dir"
+        src_dir="$( cygpath -ua "$src_dir" )"
+        cd -- "$src_dir"
+        arch=
+        [ "$MATRIX_PLATFORM" == 'x86' ] && arch=-m32
+        g++ $arch -std=c++14 -o foo foo.cpp
+      shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
