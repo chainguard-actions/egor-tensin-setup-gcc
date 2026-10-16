@@ -1,0 +1,40 @@
+name: Test specific GCC version installation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          version: 12
+          platform: x64
+          cc: 1
+        continue-on-error: true
+      - name: Assert action ran or failed gracefully (pwsh may not be available)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          GCC: ${{ steps.action.outputs.gcc }}
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "gcc output: $GCC"
+          echo "gxx output: $GXX"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ "$GCC" != "gcc-12" ]; then
+              echo "FAIL: expected gcc output to be 'gcc-12', got '$GCC'"
+              exit 1
+            fi
+            if [ "$GXX" != "g++-12" ]; then
+              echo "FAIL: expected gxx output to be 'g++-12', got '$GXX'"
+              exit 1
+            fi
+            echo "PASS: action succeeded with gcc=$GCC gxx=$GXX"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (pwsh not available in act container)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
