@@ -12,6 +12,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v2 | [`v2`](https://github.com/chainguard-actions/egor-tensin-setup-gcc/tree/v2) | [`a2861a8`](https://github.com/egor-tensin/setup-gcc/commit/a2861a8b8538f49cf2850980acccf6b05a1b2ae4) |
 | v2.0 | [`v2.0`](https://github.com/chainguard-actions/egor-tensin-setup-gcc/tree/v2.0) | [`a2861a8`](https://github.com/egor-tensin/setup-gcc/commit/a2861a8b8538f49cf2850980acccf6b05a1b2ae4) |
 | v2.0.1 | [`v2.0.1`](https://github.com/chainguard-actions/egor-tensin-setup-gcc/tree/v2.0.1) | [`6623729`](https://github.com/egor-tensin/setup-gcc/commit/66237299a5da748c4ded4b6f715fd4fff523e905) |
+| v2.0.2 | [`v2.0.2`](https://github.com/chainguard-actions/egor-tensin-setup-gcc/tree/v2.0.2) | [`eb5588a`](https://github.com/egor-tensin/setup-gcc/commit/eb5588a28b96aaa4ca1c9aa8858f30b9e59b1a08) |
 
 ## Privacy
 
