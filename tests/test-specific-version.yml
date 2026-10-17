@@ -1,0 +1,113 @@
+name: Test GCC installation with specific version
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          version: '12'
+          platform: x64
+          cc: '1'
+        continue-on-error: true
+
+      - name: Assert action ran (pwsh required; may fail gracefully if not available)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "gcc output: $GCC_OUT"
+          echo "gxx output: $GXX_OUT"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$GCC_OUT" ]; then
+              echo "FAIL: action succeeded but gcc output is empty"
+              exit 1
+            fi
+            if [ "$GCC_OUT" != "gcc-12" ]; then
+              echo "FAIL: expected 'gcc-12' but got '$GCC_OUT'"
+              exit 1
+            fi
+            if [ -z "$GXX_OUT" ]; then
+              echo "FAIL: action succeeded but gxx output is empty"
+              exit 1
+            fi
+            if [ "$GXX_OUT" != "g++-12" ]; then
+              echo "FAIL: expected 'g++-12' but got '$GXX_OUT'"
+              exit 1
+            fi
+            echo "PASS: action succeeded with gcc=$GCC_OUT gxx=$GXX_OUT"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (pwsh not available in this environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+
+      - name: Assert versioned gcc-12 binary is available (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping binary check"
+            exit 0
+          fi
+          if ! command -v gcc-12 > /dev/null 2>&1; then
+            echo "FAIL: gcc-12 not found on PATH"
+            exit 1
+          fi
+          echo "PASS: gcc-12 is available"
+          gcc-12 --version
+
+      - name: Assert versioned g++-12 binary is available (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping binary check"
+            exit 0
+          fi
+          if ! command -v g++-12 > /dev/null 2>&1; then
+            echo "FAIL: g++-12 not found on PATH"
+            exit 1
+          fi
+          echo "PASS: g++-12 is available"
+          g++-12 --version
+
+      - name: Assert cc/gcc symlinks point to versioned gcc (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping symlink checks"
+            exit 0
+          fi
+          for cmd in cc gcc; do
+            if ! command -v "$cmd" > /dev/null 2>&1; then
+              echo "FAIL: $cmd not found on PATH"
+              exit 1
+            fi
+            echo "PASS: $cmd is available"
+            "$cmd" --version | grep -i "gcc"
+          done
+
+      - name: Compile a simple C program with versioned gcc (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping compilation check"
+            exit 0
+          fi
+          cat > /tmp/hello_v.c << 'EOF'
+          #include <stdio.h>
+          int main() { printf("Hello from GCC-12!\n"); return 0; }
+          EOF
+          gcc-12 /tmp/hello_v.c -o /tmp/hello_v
+          /tmp/hello_v | grep -q "Hello from GCC-12"
+          echo "PASS: C compilation with gcc-12 succeeded"

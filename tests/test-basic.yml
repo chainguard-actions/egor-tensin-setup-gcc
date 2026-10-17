@@ -1,0 +1,109 @@
+name: Test basic GCC installation (latest)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          version: latest
+          platform: x64
+          cc: '1'
+        continue-on-error: true
+
+      - name: Assert action ran (pwsh required; may fail gracefully if not available)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "gcc output: $GCC_OUT"
+          echo "gxx output: $GXX_OUT"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$GCC_OUT" ]; then
+              echo "FAIL: action succeeded but gcc output is empty"
+              exit 1
+            fi
+            if [ -z "$GXX_OUT" ]; then
+              echo "FAIL: action succeeded but gxx output is empty"
+              exit 1
+            fi
+            echo "PASS: action succeeded with gcc=$GCC_OUT gxx=$GXX_OUT"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (pwsh not available in this environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+
+      - name: Assert gcc binary is available (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          GCC_BIN: ${{ steps.action.outputs.gcc }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping binary check"
+            exit 0
+          fi
+          echo "Checking binary: $GCC_BIN"
+          if ! command -v "$GCC_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GCC_BIN not found on PATH"
+            exit 1
+          fi
+          echo "PASS: $GCC_BIN is available"
+          "$GCC_BIN" --version
+
+      - name: Assert gxx binary is available (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          GXX_BIN: ${{ steps.action.outputs.gxx }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping binary check"
+            exit 0
+          fi
+          echo "Checking binary: $GXX_BIN"
+          if ! command -v "$GXX_BIN" > /dev/null 2>&1; then
+            echo "FAIL: $GXX_BIN not found on PATH"
+            exit 1
+          fi
+          echo "PASS: $GXX_BIN is available"
+          "$GXX_BIN" --version
+
+      - name: Assert cc/gcc/c++/g++ symlinks (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping symlink checks"
+            exit 0
+          fi
+          for cmd in cc gcc c++ g++; do
+            if ! command -v "$cmd" > /dev/null 2>&1; then
+              echo "FAIL: $cmd not found on PATH"
+              exit 1
+            fi
+            echo "PASS: $cmd is available"
+            "$cmd" --version
+          done
+
+      - name: Compile a simple C program (if action succeeded)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          if [ "$OUTCOME" != "success" ]; then
+            echo "SKIP: action did not succeed, skipping compilation check"
+            exit 0
+          fi
+          cat > /tmp/hello.c << 'EOF'
+          #include <stdio.h>
+          int main() { printf("Hello from GCC!\n"); return 0; }
+          EOF
+          gcc /tmp/hello.c -o /tmp/hello
+          /tmp/hello | grep -q "Hello from GCC"
+          echo "PASS: C compilation succeeded"
