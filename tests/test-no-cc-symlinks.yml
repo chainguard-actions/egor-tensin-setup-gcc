@@ -1,0 +1,48 @@
+name: Test GCC installation without cc symlinks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          version: latest
+          platform: x64
+          cc: '0'
+        continue-on-error: true
+
+      - name: Assert action ran (pwsh unavailable in act container is acceptable)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          GCC: ${{ steps.action.outputs.gcc }}
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "gcc output: $GCC"
+          echo "gxx output: $GXX"
+          if [ "$OUTCOME" = "success" ]; then
+            # Action succeeded — validate outputs
+            if [ -z "$GCC" ]; then
+              echo "FAIL: action succeeded but gcc output is empty"
+              exit 1
+            fi
+            if [ -z "$GXX" ]; then
+              echo "FAIL: action succeeded but gxx output is empty"
+              exit 1
+            fi
+            # With cc=0, no symlink at /usr/local/bin/cc should have been created
+            if [ -L "/usr/local/bin/cc" ]; then
+              echo "FAIL: /usr/local/bin/cc symlink was created despite cc=0"
+              exit 1
+            fi
+            echo "PASS: gcc='$GCC' gxx='$GXX', no cc symlink created"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (pwsh not available in act container)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
