@@ -1,0 +1,43 @@
+name: Test cc=0 (no links created)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Ensure pwsh is available
+        run: |
+          if command -v pwsh >/dev/null 2>&1; then pwsh --version; exit 0; fi
+          command -v curl >/dev/null 2>&1 || { sudo apt-get update; sudo apt-get install -yq curl ca-certificates; }
+          ver=7.4.6
+          case "$(uname -m)" in aarch64|arm64) arch=arm64 ;; *) arch=x64 ;; esac
+          curl -sSfL -o /tmp/pwsh.tar.gz "https://github.com/PowerShell/PowerShell/releases/download/v${ver}/powershell-${ver}-linux-${arch}.tar.gz"
+          sudo mkdir -p /opt/microsoft/powershell/7
+          sudo tar -xzf /tmp/pwsh.tar.gz -C /opt/microsoft/powershell/7
+          sudo chmod +x /opt/microsoft/powershell/7/pwsh
+          sudo ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
+          echo "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> "$GITHUB_ENV"
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 pwsh --version
+      - name: Remove any pre-existing links
+        run: sudo rm -f /usr/local/bin/cc /usr/local/bin/c++
+      - id: action
+        uses: .
+        with:
+          cc: '0'
+      - name: Assert outputs
+        env:
+          GCC: ${{ steps.action.outputs.gcc }}
+          GXX: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gcc: $GCC"; echo "gxx: $GXX"
+          if [ "$GCC" != "gcc" ] || [ "$GXX" != "g++" ]; then echo "FAIL: unexpected outputs"; exit 1; fi
+          echo "PASS"
+      - name: Assert no links created but gcc works
+        run: |
+          if [ -e /usr/local/bin/cc ] || [ -e /usr/local/bin/c++ ]; then
+            echo "FAIL: links were created despite cc=0"; ls -l /usr/local/bin/cc /usr/local/bin/c++; exit 1
+          fi
+          gcc --version || { echo "FAIL: gcc missing"; exit 1; }
+          g++ --version || { echo "FAIL: g++ missing"; exit 1; }
+          echo "PASS"

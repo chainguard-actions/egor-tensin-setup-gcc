@@ -1,4 +1,4 @@
-name: Test basic GCC installation (latest, x64, cc=1)
+name: Test basic usage (latest, x64, cc links)
 on:
   workflow_dispatch:
 jobs:
@@ -6,84 +6,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install PowerShell
+      - name: Ensure pwsh is available
         run: |
-          if ! command -v pwsh &>/dev/null; then
-            sudo apt-get update -q
-            sudo apt-get install -yq --no-install-recommends \
-              wget apt-transport-https software-properties-common
-            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
-            sudo dpkg -i packages-microsoft-prod.deb
-            sudo apt-get update -q
-            sudo apt-get install -yq powershell
-          fi
-          pwsh --version
-
+          if command -v pwsh >/dev/null 2>&1; then pwsh --version; exit 0; fi
+          command -v curl >/dev/null 2>&1 || { sudo apt-get update; sudo apt-get install -yq curl ca-certificates; }
+          ver=7.4.6
+          case "$(uname -m)" in aarch64|arm64) arch=arm64 ;; *) arch=x64 ;; esac
+          curl -sSfL -o /tmp/pwsh.tar.gz "https://github.com/PowerShell/PowerShell/releases/download/v${ver}/powershell-${ver}-linux-${arch}.tar.gz"
+          sudo mkdir -p /opt/microsoft/powershell/7
+          sudo tar -xzf /tmp/pwsh.tar.gz -C /opt/microsoft/powershell/7
+          sudo chmod +x /opt/microsoft/powershell/7/pwsh
+          sudo ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
+          echo "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> "$GITHUB_ENV"
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 pwsh --version
       - id: action
         uses: .
-        with:
-          version: latest
-          platform: x64
-          cc: 1
-
-      - name: Assert gcc output is 'gcc'
+      - name: Assert outputs
         env:
-          ACTUAL: ${{ steps.action.outputs.gcc }}
+          GCC: ${{ steps.action.outputs.gcc }}
+          GXX: ${{ steps.action.outputs.gxx }}
         run: |
-          echo "actual gcc: $ACTUAL"
-          if [ "$ACTUAL" != "gcc" ]; then
-            echo "FAIL: expected gcc output to be 'gcc', got '$ACTUAL'"
-            exit 1
-          fi
+          echo "gcc: $GCC"; echo "gxx: $GXX"
+          if [ "$GCC" != "gcc" ]; then echo "FAIL: expected gcc"; exit 1; fi
+          if [ "$GXX" != "g++" ]; then echo "FAIL: expected g++"; exit 1; fi
           echo "PASS"
-
-      - name: Assert gxx output is 'g++'
-        env:
-          ACTUAL: ${{ steps.action.outputs.gxx }}
+      - name: Assert cc/c++ links and compilers work
         run: |
-          echo "actual gxx: $ACTUAL"
-          if [ "$ACTUAL" != "g++" ]; then
-            echo "FAIL: expected gxx output to be 'g++', got '$ACTUAL'"
-            exit 1
+          ls -l /usr/local/bin/cc /usr/local/bin/c++ || true
+          if [ ! -L /usr/local/bin/cc ] || [ ! -L /usr/local/bin/c++ ]; then
+            echo "FAIL: cc/c++ symlinks missing in /usr/local/bin"; exit 1
           fi
+          printf 'int main(void){return 0;}\n' > /tmp/t.c
+          printf '#include <iostream>\nint main(){std::cout<<"hi\\n";}\n' > /tmp/t.cpp
+          cc /tmp/t.c -o /tmp/tc && /tmp/tc || { echo "FAIL: cc compile"; exit 1; }
+          c++ /tmp/t.cpp -o /tmp/tcpp && /tmp/tcpp | grep -q hi || { echo "FAIL: c++ compile"; exit 1; }
           echo "PASS"
-
-      - name: Assert gcc binary is available
-        run: |
-          which gcc
-          gcc --version
-          echo "PASS: gcc is available"
-
-      - name: Assert g++ binary is available
-        run: |
-          which g++
-          g++ --version
-          echo "PASS: g++ is available"
-
-      - name: Assert cc symlink is available
-        run: |
-          which cc
-          cc --version
-          echo "PASS: cc symlink is available"
-
-      - name: Assert c++ symlink is available
-        run: |
-          which c++
-          c++ --version
-          echo "PASS: c++ symlink is available"
-
-      - name: Assert can compile a C program
-        run: |
-          echo 'int main() { return 0; }' > /tmp/test.c
-          gcc /tmp/test.c -o /tmp/test_c
-          /tmp/test_c
-          echo "PASS: C compilation succeeded"
-
-      - name: Assert can compile a C++ program
-        run: |
-          echo '#include <iostream>
-          int main() { std::cout << "hello" << std::endl; return 0; }' > /tmp/test.cpp
-          g++ /tmp/test.cpp -o /tmp/test_cpp
-          /tmp/test_cpp
-          echo "PASS: C++ compilation succeeded"
