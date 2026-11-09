@@ -1,5 +1,6 @@
 name: Install GCC
 description: Install GCC
+
 inputs:
   version:
     description: GCC version to install
@@ -13,13 +14,15 @@ inputs:
     description: Set up cc/gcc/c++/g++ executables
     required: false
     default: 1
+
 outputs:
   gcc:
     description: gcc binary name
-    value: '${{ steps.install.outputs.gcc }}'
+    value: ${{ steps.install.outputs.gcc }}
   gxx:
     description: g++ binary name
-    value: '${{ steps.install.outputs.gxx }}'
+    value: ${{ steps.install.outputs.gxx }}
+
 runs:
   using: composite
   steps:
@@ -42,25 +45,22 @@ runs:
           "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
     - id: install
       env:
-        INPUT_OS: ${{ runner.os }}
-        INPUT_VERSION: ${{ inputs.version }}
-        INPUT_PLATFORM: ${{ inputs.platform }}
+        ARG_VERSION: ${{ inputs.version }}
+        ARG_PLATFORM: ${{ inputs.platform }}
       run: |
-        New-Variable os -Value $env:INPUT_OS -Option Constant
+        $linux_host = $env:RUNNER_OS -eq 'Linux'
+        $windows_host = $env:RUNNER_OS -eq 'Windows'
 
-        New-Variable linux_host -Value ($os -eq 'Linux') -Option Constant
-        New-Variable windows_host -Value ($os -eq 'Windows') -Option Constant
-
-        New-Variable version -Value ($env:INPUT_VERSION) -Option Constant
-        New-Variable latest -Value ($version -eq 'latest') -Option Constant
-        New-Variable x64 -Value ($env:INPUT_PLATFORM -eq 'x64') -Option Constant
+        $version = (Get-ChildItem env:ARG_VERSION).Value
+        $latest = $version -eq 'latest'
+        $x64 = (Get-ChildItem env:ARG_PLATFORM).Value -eq 'x64'
 
         function Locate-Choco {
             $path = Get-Command 'choco' -ErrorAction SilentlyContinue
             if ($path) {
                 $path.Path
             } else {
-                Join-Path ${env:ProgramData} 'chocolatey' 'bin' 'choco'
+                Join-Path (Get-ChildItem env:ProgramData).Value 'chocolatey' 'bin' 'choco'
             }
         }
 
@@ -111,26 +111,24 @@ runs:
             throw "Sorry, installing GCC is unsupported on $os"
         }
 
-        $safe_gcc = $gcc -replace '[\r\n]', ''
-        $safe_gxx = $gxx -replace '[\r\n]', ''
-        echo "gcc=$safe_gcc" >> $env:GITHUB_OUTPUT
-        echo "gxx=$safe_gxx" >> $env:GITHUB_OUTPUT
+        $gcc = $gcc -replace '[\r\n]', ''
+        $gxx = $gxx -replace '[\r\n]', ''
+        echo "gcc=$gcc" >> $env:GITHUB_OUTPUT
+        echo "gxx=$gxx" >> $env:GITHUB_OUTPUT
       shell: pwsh
+
     - env:
-        INPUT_OS: ${{ runner.os }}
-        INPUT_CC: ${{ inputs.cc }}
-        INPUT_GCC: ${{ steps.install.outputs.gcc }}
-        INPUT_GXX: ${{ steps.install.outputs.gxx }}
+        ARG_CC: ${{ inputs.cc }}
+        GCC: ${{ steps.install.outputs.gcc }}
+        GXX: ${{ steps.install.outputs.gxx }}
       run: |
-        New-Variable os -Value $env:INPUT_OS -Option Constant
+        $linux_host = $env:RUNNER_OS -eq 'Linux'
+        $windows_host = $env:RUNNER_OS -eq 'Windows'
 
-        New-Variable linux_host -Value ($os -eq 'Linux') -Option Constant
-        New-Variable windows_host -Value ($os -eq 'Windows') -Option Constant
+        $cc = (Get-ChildItem env:ARG_CC).Value -eq '1'
 
-        New-Variable cc -Value ($env:INPUT_CC -eq '1') -Option Constant
-
-        New-Variable gcc -Value $env:INPUT_GCC -Option Constant
-        New-Variable gxx -Value $env:INPUT_GXX -Option Constant
+        $gcc = (Get-ChildItem env:GCC).Value
+        $gxx = (Get-ChildItem env:GXX).Value
 
         function Link-Exe {
             param(
@@ -163,6 +161,7 @@ runs:
             }
         }
       shell: pwsh
+
 branding:
   icon: star
   color: green

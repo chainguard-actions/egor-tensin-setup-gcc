@@ -10,94 +10,44 @@
 
 **Harden Agent Version:** `2`
 
-Action **egor-tensin--setup-gcc/v2.0** was hardened automatically. 7 finding(s) were identified and resolved across 1 iteration(s).
+Action **egor-tensin--setup-gcc/v2.0** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Multiple run: blocks directly interpolate ${{ ... }} expressions inside PowerShell shell scripts, enabling script injection. In action.yml step 1 (id: install): '${{ runner.os }}', '${{ inputs.version }}', and '${{ inputs.platform }}' are interpolated directly into the script string. In action.yml step 2: '${{ runner.os }}', '${{ inputs.cc }}', '${{ steps.install.outputs.gcc }}', and '${{ steps.install.outputs.gxx }}' are interpolated directly. In .github/actions/build-foo/action.yml: '${{ inputs.version }}', '${{ matrix.platform }}', and '${{ runner.os }}' are interpolated directly. In .github/actions/check-cc/action.yml: '${{ inputs.version }}' is interpolated directly. Any of these values can contain PowerShell metacharacters that execute arbitrary code before the shell ever sees them. Sub-rule (a): direct expression interpolation in run: blocks.
+Rule (a): a GitHub Actions expression is placed directly in a run: script. The 'install' step has `$linux_host = '${{ runner.os }}' -eq 'Linux'` and `$windows_host = '${{ runner.os }}' -eq 'Windows'`. Fix: use the $env:RUNNER_OS environment variable instead.
 
 Locations:
 
-- `action.yml:29`
-- `action.yml:33`
 - `action.yml:34`
-- `action.yml:92`
-- `action.yml:95`
-- `action.yml:97`
-- `action.yml:98`
-- `.github/actions/build-foo/action.yml:12`
-- `.github/actions/build-foo/action.yml:16`
-- `.github/actions/build-foo/action.yml:21`
-- `.github/actions/check-cc/action.yml:27`
+- `action.yml:35`
 
-### github-env-injection (severity: high)
+### script-injection (severity: high)
 
-action.yml step 1 (id: install) writes $gcc and $gxx to $env:GITHUB_OUTPUT without sanitization. These variables are derived from ${{ inputs.version }} via string concatenation (e.g. `$gcc += "-$version"` where $version comes from `${{ inputs.version }}`). An attacker-controlled input.version containing newlines could inject arbitrary key=value pairs into GITHUB_OUTPUT, poisoning subsequent steps. The required sanitization step (printf '%s' ... | tr -d '\n\r') is absent.
-
-Locations:
-
-- `action.yml:88`
-- `action.yml:89`
-
-### unpinned-uses (severity: high)
-
-The workflow file uses actions/checkout@v6, which is a mutable tag reference rather than a pinned full-length SHA commit hash. A tag can be moved to point to a different (potentially malicious) commit, enabling supply-chain attacks. It should be pinned to a full 40-character hex SHA (e.g. actions/checkout@<sha> # v6).
-
-Locations:
-
-- `.github/workflows/test.yml:19`
-
-### missing-permissions (severity: medium)
-
-The workflow file .github/workflows/test.yml has no top-level permissions: key, and neither of its jobs (ubuntu, versions) defines a job-level permissions: block. Without explicit permissions, the workflow inherits the default repository permissions (which may include write access to contents, packages, etc.), violating the principle of least privilege.
-
-Locations:
-
-- `.github/workflows/test.yml:1`
-
-### static-inline-injection (severity: high)
-
-shell injection: expression "${{ inputs.version }}" appears directly in run: block of step ""; move to env: map
-
-Locations:
-
-- `action.yml:36`
-
-### static-inline-injection (severity: high)
-
-shell injection: expression "${{ inputs.platform }}" appears directly in run: block of step ""; move to env: map
-
-Locations:
-
-- `action.yml:38`
-
-### static-inline-injection (severity: high)
-
-shell injection: expression "${{ inputs.cc }}" appears directly in run: block of step ""; move to env: map
+Rule (a): a GitHub Actions expression is placed directly in a run: script. The link step (the second step) has `$linux_host = '${{ runner.os }}' -eq 'Linux'` and `$windows_host = '${{ runner.os }}' -eq 'Windows'`. Fix: use the $env:RUNNER_OS environment variable instead.
 
 Locations:
 
 - `action.yml:106`
+- `action.yml:107`
+
+### github-env-injection (severity: high)
+
+The 'install' step builds $gcc and $gxx from the untrusted inputs.version value (passed in through ARG_VERSION as `$gcc += "-$version"`). It then writes them with `echo "gcc=$gcc" >> $env:GITHUB_OUTPUT` and `echo "gxx=$gxx" >> $env:GITHUB_OUTPUT` without removing CR/LF first. A version string containing a newline could inject extra step outputs. Fix: strip \n and \r from the value before writing it.
+
+Locations:
+
+- `action.yml:97`
+- `action.yml:98`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, github-env-injection, unpinned-uses, missing-permissions, static-inline-injection
+**Fixes applied:** script-injection, github-env-injection
 
 **Notes:**
 
-Fixed all findings across 4 files:
-
-1. action.yml (step 1 - install): Moved ${{ runner.os }}, ${{ inputs.version }}, ${{ inputs.platform }} to env: block as INPUT_OS, INPUT_VERSION, INPUT_PLATFORM. Added newline sanitization before writing to GITHUB_OUTPUT using PowerShell -replace '[\r\n]', ''.
-
-2. action.yml (step 2): Moved ${{ runner.os }}, ${{ inputs.cc }}, ${{ steps.install.outputs.gcc }}, ${{ steps.install.outputs.gxx }} to env: block as INPUT_OS, INPUT_CC, INPUT_GCC, INPUT_GXX.
-
-3. .github/actions/build-foo/action.yml: Moved ${{ inputs.version }}, ${{ matrix.platform }}, ${{ runner.os }} to env: block.
-
-4. .github/actions/check-cc/action.yml: Moved ${{ inputs.version }} to env: block.
-
-5. .github/workflows/test.yml: Pinned actions/checkout@v6 to full SHA d23441a48e516b6c34aea4fa41551a30e30af803 # v6 (both occurrences). Added top-level permissions: {} block.
+In both pwsh steps, '${{ runner.os }}' was replaced with $env:RUNNER_OS. In the install step, $gcc and $gxx now have CR/LF stripped (-replace '[\r\n]', '') before they are written to GITHUB_OUTPUT.
 

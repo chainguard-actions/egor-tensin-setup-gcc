@@ -1,0 +1,72 @@
+name: Test cc disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Ensure pwsh and sudo are available (act image lacks them)
+        run: |
+          set -e
+          SUDO=""
+          if [ "$(id -u)" != "0" ]; then SUDO=sudo; fi
+          if ! command -v sudo >/dev/null 2>&1; then
+            printf '#!/bin/sh\nexec env "$@"\n' > /usr/local/bin/sudo
+            chmod +x /usr/local/bin/sudo
+          fi
+          if ! command -v pwsh >/dev/null 2>&1; then
+            case "$(uname -m)" in
+              x86_64) arch=x64 ;;
+              aarch64|arm64) arch=arm64 ;;
+              *) echo "unsupported arch"; exit 1 ;;
+            esac
+            ver=7.4.6
+            url="https://github.com/PowerShell/PowerShell/releases/download/v${ver}/powershell-${ver}-linux-${arch}.tar.gz"
+            tmp="$(mktemp -d)"
+            if command -v curl >/dev/null 2>&1; then
+              curl -fsSL "$url" -o "$tmp/pwsh.tar.gz"
+            else
+              wget -q "$url" -O "$tmp/pwsh.tar.gz"
+            fi
+            $SUDO mkdir -p /opt/microsoft/powershell/7
+            $SUDO tar -xzf "$tmp/pwsh.tar.gz" -C /opt/microsoft/powershell/7
+            $SUDO chmod +x /opt/microsoft/powershell/7/pwsh
+            printf '#!/bin/sh\nexport DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1\nexec /opt/microsoft/powershell/7/pwsh "$@"\n' > "$tmp/pwsh"
+            $SUDO install -m 0755 "$tmp/pwsh" /usr/local/bin/pwsh
+          fi
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+      - name: Remove any pre-existing /usr/local/bin links
+        run: |
+          SUDO=""
+          if [ "$(id -u)" != "0" ]; then SUDO=sudo; fi
+          for l in cc c++; do
+            if [ -L "/usr/local/bin/$l" ]; then $SUDO rm -f "/usr/local/bin/$l"; fi
+          done
+      - id: action
+        uses: .
+        with:
+          cc: '0'
+      - name: Assert outputs
+        env:
+          GCC_OUT: ${{ steps.action.outputs.gcc }}
+          GXX_OUT: ${{ steps.action.outputs.gxx }}
+        run: |
+          echo "gcc: $GCC_OUT"
+          echo "gxx: $GXX_OUT"
+          if [ "$GCC_OUT" != "gcc" ]; then echo "FAIL: expected 'gcc'"; exit 1; fi
+          if [ "$GXX_OUT" != "g++" ]; then echo "FAIL: expected 'g++'"; exit 1; fi
+          echo "PASS"
+      - name: Assert no links created and gcc works
+        run: |
+          set -e
+          if [ -L /usr/local/bin/cc ] || [ -L /usr/local/bin/c++ ]; then
+            echo "FAIL: links should not be created when cc=0"
+            ls -l /usr/local/bin/cc /usr/local/bin/c++ || true
+            exit 1
+          fi
+          tmp="$(mktemp -d)"
+          printf 'int main(void){return 0;}\n' > "$tmp/a.c"
+          gcc "$tmp/a.c" -o "$tmp/a"
+          "$tmp/a"
+          echo "PASS"

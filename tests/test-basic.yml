@@ -1,4 +1,4 @@
-name: Test basic GCC installation (latest, x64)
+name: Test basic usage (latest GCC)
 on:
   workflow_dispatch:
 jobs:
@@ -6,116 +6,64 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install PowerShell
+      - name: Ensure pwsh and sudo are available (act image lacks them)
         run: |
-          if ! command -v pwsh > /dev/null 2>&1; then
-            sudo apt-get update -q
-            sudo apt-get install -yq --no-install-recommends \
-              wget apt-transport-https software-properties-common
-            wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
-            sudo dpkg -i packages-microsoft-prod.deb
-            sudo apt-get update -q
-            sudo apt-get install -yq powershell
+          set -e
+          SUDO=""
+          if [ "$(id -u)" != "0" ]; then SUDO=sudo; fi
+          if ! command -v sudo >/dev/null 2>&1; then
+            printf '#!/bin/sh\nexec env "$@"\n' > /usr/local/bin/sudo
+            chmod +x /usr/local/bin/sudo
           fi
-          pwsh --version
-
+          if ! command -v pwsh >/dev/null 2>&1; then
+            case "$(uname -m)" in
+              x86_64) arch=x64 ;;
+              aarch64|arm64) arch=arm64 ;;
+              *) echo "unsupported arch"; exit 1 ;;
+            esac
+            ver=7.4.6
+            url="https://github.com/PowerShell/PowerShell/releases/download/v${ver}/powershell-${ver}-linux-${arch}.tar.gz"
+            tmp="$(mktemp -d)"
+            if command -v curl >/dev/null 2>&1; then
+              curl -fsSL "$url" -o "$tmp/pwsh.tar.gz"
+            else
+              wget -q "$url" -O "$tmp/pwsh.tar.gz"
+            fi
+            $SUDO mkdir -p /opt/microsoft/powershell/7
+            $SUDO tar -xzf "$tmp/pwsh.tar.gz" -C /opt/microsoft/powershell/7
+            $SUDO chmod +x /opt/microsoft/powershell/7/pwsh
+            printf '#!/bin/sh\nexport DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1\nexec /opt/microsoft/powershell/7/pwsh "$@"\n' > "$tmp/pwsh"
+            $SUDO install -m 0755 "$tmp/pwsh" /usr/local/bin/pwsh
+          fi
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
       - id: action
         uses: .
-        with:
-          version: latest
-          platform: x64
-          cc: 1
-
-      - name: Assert gcc output is set
+      - name: Assert outputs
         env:
           GCC_OUT: ${{ steps.action.outputs.gcc }}
-        run: |
-          echo "gcc output: $GCC_OUT"
-          if [ -z "$GCC_OUT" ]; then
-            echo "FAIL: gcc output is empty"
-            exit 1
-          fi
-          echo "PASS: gcc output = $GCC_OUT"
-
-      - name: Assert gxx output is set
-        env:
           GXX_OUT: ${{ steps.action.outputs.gxx }}
         run: |
-          echo "gxx output: $GXX_OUT"
-          if [ -z "$GXX_OUT" ]; then
-            echo "FAIL: gxx output is empty"
+          echo "gcc: $GCC_OUT"
+          echo "gxx: $GXX_OUT"
+          if [ "$GCC_OUT" != "gcc" ]; then echo "FAIL: expected gcc output 'gcc'"; exit 1; fi
+          if [ "$GXX_OUT" != "g++" ]; then echo "FAIL: expected gxx output 'g++'"; exit 1; fi
+          echo "PASS"
+      - name: Assert cc/c++ links exist and compile
+        run: |
+          set -e
+          for exe in cc c++ gcc g++; do
+            if ! command -v "$exe" >/dev/null 2>&1; then echo "FAIL: $exe not found"; exit 1; fi
+          done
+          if [ ! -L /usr/local/bin/cc ] || [ ! -L /usr/local/bin/c++ ]; then
+            echo "FAIL: expected /usr/local/bin/cc and /usr/local/bin/c++ symlinks"
+            ls -l /usr/local/bin || true
             exit 1
           fi
-          echo "PASS: gxx output = $GXX_OUT"
-
-      - name: Assert gcc binary is executable
-        env:
-          GCC_BIN: ${{ steps.action.outputs.gcc }}
-        run: |
-          echo "Checking gcc binary: $GCC_BIN"
-          if ! command -v "$GCC_BIN" > /dev/null 2>&1; then
-            echo "FAIL: $GCC_BIN not found in PATH"
-            exit 1
-          fi
-          echo "PASS: $GCC_BIN is available"
-          "$GCC_BIN" --version
-
-      - name: Assert gxx binary is executable
-        env:
-          GXX_BIN: ${{ steps.action.outputs.gxx }}
-        run: |
-          echo "Checking g++ binary: $GXX_BIN"
-          if ! command -v "$GXX_BIN" > /dev/null 2>&1; then
-            echo "FAIL: $GXX_BIN not found in PATH"
-            exit 1
-          fi
-          echo "PASS: $GXX_BIN is available"
-          "$GXX_BIN" --version
-
-      - name: Assert cc symlink is set up
-        run: |
-          echo "Checking cc symlink"
-          if ! command -v cc > /dev/null 2>&1; then
-            echo "FAIL: cc not found in PATH"
-            exit 1
-          fi
-          echo "PASS: cc is available"
-          cc --version
-
-      - name: Assert gcc symlink is set up
-        run: |
-          echo "Checking gcc symlink"
-          if ! command -v gcc > /dev/null 2>&1; then
-            echo "FAIL: gcc not found in PATH"
-            exit 1
-          fi
-          echo "PASS: gcc is available"
-          gcc --version
-
-      - name: Assert c++ symlink is set up
-        run: |
-          echo "Checking c++ symlink"
-          if ! command -v c++ > /dev/null 2>&1; then
-            echo "FAIL: c++ not found in PATH"
-            exit 1
-          fi
-          echo "PASS: c++ is available"
-          c++ --version
-
-      - name: Assert g++ symlink is set up
-        run: |
-          echo "Checking g++ symlink"
-          if ! command -v g++ > /dev/null 2>&1; then
-            echo "FAIL: g++ not found in PATH"
-            exit 1
-          fi
-          echo "PASS: g++ is available"
-          g++ --version
-
-      - name: Compile a simple C program
-        run: |
-          echo '#include <stdio.h>' > /tmp/hello.c
-          echo 'int main() { printf("Hello, World!\n"); return 0; }' >> /tmp/hello.c
-          gcc /tmp/hello.c -o /tmp/hello
-          /tmp/hello | grep -q "Hello, World!" && echo "PASS: C compilation works" || (echo "FAIL: C compilation failed"; exit 1)
+          tmp="$(mktemp -d)"
+          printf '#include <stdio.h>\nint main(void){puts("hello-c");return 0;}\n' > "$tmp/a.c"
+          printf '#include <iostream>\nint main(){std::cout<<"hello-cxx"<<std::endl;return 0;}\n' > "$tmp/b.cpp"
+          cc "$tmp/a.c" -o "$tmp/a"
+          c++ "$tmp/b.cpp" -o "$tmp/b"
+          [ "$("$tmp/a")" = "hello-c" ] || { echo "FAIL: C program output wrong"; exit 1; }
+          [ "$("$tmp/b")" = "hello-cxx" ] || { echo "FAIL: C++ program output wrong"; exit 1; }
+          echo "PASS"
